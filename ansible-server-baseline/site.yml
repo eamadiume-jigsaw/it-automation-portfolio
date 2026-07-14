@@ -1,0 +1,5 @@
+---
+- name: Apply server security baseline
+  hosts: windows
+  roles:
+    - server-baseline

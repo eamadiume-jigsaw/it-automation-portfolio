@@ -1,0 +1,16 @@
+---
+# Features to remove as part of the security baseline
+insecure_features:
+  - Telnet-Client
+  - FS-SMB1
+
+# Firewall rule blocking legacy Telnet
+blocked_port: 23
+blocked_port_protocol: tcp
+
+# Service that must always be running
+required_service: spooler
+
+# Standard folder structure
+automation_root: C:\Automation
+log_folder: C:\Automation\ITLogs

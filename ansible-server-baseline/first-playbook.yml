@@ -1,0 +1,13 @@
+---
+- name: Ensure Automation folder structure exists
+  hosts: windows
+  tasks:
+    - name: Ensure C:\Automation exists
+      win_file:
+        path: C:\Automation
+        state: directory
+
+    - name: Ensure C:\Automation\AnsibleTest exists
+      win_file:
+        path: C:\Automation\AnsibleTest
+        state: directory

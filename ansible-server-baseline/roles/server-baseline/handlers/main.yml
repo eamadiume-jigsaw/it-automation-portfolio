@@ -1,0 +1,5 @@
+---
+- name: Log baseline change
+  win_shell: >
+    Add-Content -Path "{{ log_folder }}\baseline-changes.log"
+    -Value "$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') - Baseline task applied a change on $env:COMPUTERNAME"
