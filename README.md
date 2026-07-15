@@ -27,6 +27,14 @@ legacy feature removal, firewall enforcement, registry hardening, service assura
 using Ansible Vault for encrypted credential storage. Built to demonstrate the same
 outcome through a second, platform-agnostic configuration management tool.
 
+### 4. [Network Device Monitor & Auto-Remediation](./network-monitor)
+A Python monitoring tool that pings network devices (routers, switches, firewalls,
+servers) on a schedule, logs uptime history to SQLite, sends Microsoft Teams alerts on
+sustained failure, and attempts gated auto-remediation — restarting a Windows service
+via WinRM — but only on devices explicitly flagged as safe to touch. Production network
+gear stays monitor-and-alert-only by design, so a bug in the remediation logic can
+never reach it.
+
 ## Skills demonstrated across these projects
 
 - Microsoft Graph API scripting (PowerShell + Graph SDK)
@@ -37,5 +45,10 @@ outcome through a second, platform-agnostic configuration management tool.
 - DSC credential encryption via Document Encryption certificates
 - Ansible role-based configuration management (WinRM-managed Windows targets)
 - Ansible Vault credential encryption
+- Python scripting: network monitoring, SQLite logging, webhook alerting, WinRM
+  automation via pywinrm
+- Environment-variable-based credential handling (no hardcoded secrets)
+- Deliberate blast-radius/safety design for automation touching production systems
 - Systematic troubleshooting of real infrastructure issues (RBAC propagation delays,
-  WinRM/firewall configuration, module scope conflicts, UAC remote token restrictions)
+  WinRM/firewall configuration, module scope conflicts, UAC remote token restrictions,
+  VPN subnet routing gaps)
