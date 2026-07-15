@@ -1,0 +1,21 @@
+devices:
+  - name: "Office Router"
+    ip: "ROUTER_IP"
+    type: router
+    remediation_enabled: false
+
+  - name: "Core Switch"
+    ip: "SWITCH_IP"
+    type: switch
+    remediation_enabled: false
+
+  - name: "Fortinet Firewall"
+    ip: "FIREWALL_IP"
+    type: firewall
+    remediation_enabled: false
+
+  - name: "Test VM"
+    ip: "TEST_SERVER_IP"
+    type: server
+    remediation_enabled: true
+    remediation_service: "Spooler"
