@@ -1,6 +1,7 @@
 """
 EC2 Monitor - Snapshot Report
-Pulls running EC2 instances across regions and reports basic CloudWatch metrics.
+Pulls running EC2 instances across regions, reports CloudWatch CPU metrics,
+and summarizes configured S3 buckets.
 """
 
 import boto3
@@ -8,6 +9,9 @@ from datetime import datetime, timedelta, timezone
 
 # Regions to check - add/remove as needed
 REGIONS = ["eu-west-2", "eu-north-1"]
+
+# S3 buckets to check - add bucket names as needed
+BUCKETS = ["enyioma-web-server-logs-d6a88c32"]
 
 
 def get_instances(region):
@@ -57,6 +61,37 @@ def get_cpu_utilization(instance_id, region):
     return round(avg, 2)
 
 
+def get_bucket_summary(bucket_name):
+    """Return object count and total size (in MB) for a given S3 bucket."""
+    s3 = boto3.client("s3")
+
+    paginator = s3.get_paginator("list_objects_v2")
+    total_objects = 0
+    total_bytes = 0
+
+    try:
+        for page in paginator.paginate(Bucket=bucket_name):
+            for obj in page.get("Contents", []):
+                total_objects += 1
+                total_bytes += obj["Size"]
+    except s3.exceptions.NoSuchBucket:
+        return None
+
+    total_mb = round(total_bytes / (1024 * 1024), 2)
+    return {"objects": total_objects, "size_mb": total_mb}
+
+
+def get_public_access_status(bucket_name):
+    """Return whether public access is fully blocked for a bucket."""
+    s3 = boto3.client("s3")
+    try:
+        response = s3.get_public_access_block(Bucket=bucket_name)
+        config = response["PublicAccessBlockConfiguration"]
+        return all(config.values())
+    except s3.exceptions.ClientError:
+        return None
+
+
 def main():
     print(f"\nEC2 Snapshot Report - {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC')}")
     print("=" * 70)
@@ -84,6 +119,29 @@ def main():
                     print(f"  CPU Avg:    {cpu}%")
                 else:
                     print(f"  CPU Avg:    No data yet (instance may be too new)")
+
+            print()
+
+    if BUCKETS:
+        print("S3 Buckets")
+        print("-" * 70)
+        for bucket in BUCKETS:
+            summary = get_bucket_summary(bucket)
+            public_blocked = get_public_access_status(bucket)
+
+            print(f"  Bucket:     {bucket}")
+            if summary is not None:
+                print(f"  Objects:    {summary['objects']}")
+                print(f"  Size:       {summary['size_mb']} MB")
+            else:
+                print(f"  Status:     Not found or inaccessible")
+
+            if public_blocked is True:
+                print(f"  Public access:  Blocked (secure)")
+            elif public_blocked is False:
+                print(f"  Public access:  WARNING - not fully blocked")
+            else:
+                print(f"  Public access:  Unable to determine")
 
             print()
 
