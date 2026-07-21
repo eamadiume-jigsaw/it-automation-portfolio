@@ -11,7 +11,7 @@ from datetime import datetime, timedelta, timezone
 REGIONS = ["eu-west-2", "eu-north-1"]
 
 # S3 buckets to check - add bucket names as needed
-BUCKETS = ["enyioma-web-server-logs-d6a88c32"]
+BUCKETS = []
 
 
 def get_instances(region):
