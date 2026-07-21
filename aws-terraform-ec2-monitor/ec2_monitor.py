@@ -17,7 +17,9 @@ BUCKETS = ["enyioma-web-server-logs-d6a88c32"]
 def get_instances(region):
     """Return a list of EC2 instances (with key details) for a given region."""
     ec2 = boto3.client("ec2", region_name=region)
-    response = ec2.describe_instances()
+    response = ec2.describe_instances(
+        Filters=[{"Name": "instance-state-name", "Values": ["running", "stopped", "pending", "stopping"]}]
+    )
 
     instances = []
     for reservation in response["Reservations"]:
