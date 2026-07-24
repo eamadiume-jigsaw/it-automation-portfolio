@@ -92,6 +92,20 @@ Not everything worked first try, and I want to be transparent about that rather 
 - A growing historical dataset (hourly CSV entries) that can support future uptime reporting or trend analysis
 - Least-privilege alerting: real-time notification on failure, without granting the automation broad tenant-wide mail-send rights
 
+## Update: Root Cause Resolved
+
+At the time of writing, the working theory was that Server Manager's "no deployment exists" message was a permanent, cosmetic quirk of a legacy-style RDS deployment it simply doesn't recognise — and the monitoring script above was built specifically to work around that by checking real health signals instead of trusting the console.
+
+That reasoning held up, but there was a second layer to it. Rather than force an immediate fix right after the outage — which would have meant taking the RDS host down again, disrupting users who'd only just been restored — I deliberately held off and scheduled the actual remediation for a planned maintenance window.
+
+**Fix applied:** disjoining the server from the domain and rejoining it.
+
+A clean domain disjoin/rejoin re-establishes the machine's secure channel and Kerberos trust with Active Directory, and typically forces AD/DNS to re-register the computer object from scratch. It's a reasonable prime suspect here: an abrupt, power-loss-driven shutdown mid-write is exactly the kind of event that can leave AD-side attributes tied to the server in a stale or inconsistent state — which Server Manager's deployment lookup may depend on when validating the RDS role against the server pool.
+
+After the rejoin, Server Manager correctly recognised the existing deployment again.
+
+**Why this matters for the story:** the false alarm wasn't just tolerated — it was properly root-caused and resolved, but on a deliberately chosen timeline rather than a reactive one. The monitoring script wasn't a permanent workaround; it was the safety net that made it *safe* to wait for the right maintenance window instead of forcing a second disruptive outage on users right after the first one. It stays in place going forward regardless, since it now also confirms the fix has held and gives ongoing visibility that doesn't depend on Server Manager's console being accurate.
+
 ## Tech Stack
 
 - PowerShell 5.1
