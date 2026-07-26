@@ -34,6 +34,14 @@
     window meets or exceeds this value, the check is flagged as Warning even
     if services are running. Default: 20 (percent).
 
+.PARAMETER MinimumSampleSize
+    Minimum number of connection attempts (successes + timeouts) required in
+    the lookback window before the failure rate is used to determine status.
+    Below this threshold, a single timeout can swing the failure rate to 100%
+    with no real statistical meaning (e.g. 1 timeout out of 2 attempts), so
+    the script reports the raw numbers but does not escalate to Warning based
+    on rate alone. Default: 10.
+
 .PARAMETER SendAlertOnFailure
     Switch. If set, and the overall status is Warning or Critical, an email
     alert is sent via Microsoft Graph using certificate-based app-only auth
@@ -90,6 +98,7 @@ param(
     [int]$LookbackHours = 24,
     [string]$CsvLogPath = "C:\IT\Logs\RDSBrokerHealthCheck.csv",
     [int]$FailureThreshold = 20,
+    [int]$MinimumSampleSize = 10,
 
     [switch]$SendAlertOnFailure,
     [string]$TenantId,
@@ -172,6 +181,12 @@ function Get-GraphAppOnlyToken {
     $encPayload = ConvertTo-Base64Url $payload
     $unsigned   = "$encHeader.$encPayload"
 
+    # Always use GetRSAPrivateKey() rather than the legacy $cert.PrivateKey accessor.
+    # Certs generated via New-SelfSignedCertificate default to a CNG key storage
+    # provider; $cert.PrivateKey returns a legacy CAPI RSACryptoServiceProvider
+    # object for these, which throws "Invalid algorithm specified" on SHA256
+    # SignData calls. GetRSAPrivateKey() correctly returns a CNG-compatible
+    # RSACng object that supports SHA256/PKCS1 signing.
     $rsa = [System.Security.Cryptography.X509Certificates.RSACertificateExtensions]::GetRSAPrivateKey($cert)
     if (-not $rsa) {
         throw "Could not obtain an RSA private key object from the certificate. Ensure the certificate has an exportable/accessible private key."
@@ -312,10 +327,20 @@ else {
 Write-Section "Overall Status"
 
 $exitCode = 0
+$sampleSize = $result.SuccessfulLogons + $result.FailedOrTimedOut
 
 if ($result.BrokerServiceStatus -ne 'Running') {
     $result.OverallStatus = "Critical"
     $exitCode = 2
+}
+elseif ($sampleSize -lt $MinimumSampleSize) {
+    # Not enough connection attempts in this window for the failure rate to be
+    # statistically meaningful - e.g. 1 timeout out of 2 attempts is 100% but
+    # tells you nothing. Report Healthy (services are up, which is what we can
+    # actually confirm) and note the low sample size rather than false-alarming.
+    $result.OverallStatus = "Healthy"
+    $exitCode = 0
+    $result.Notes += "Failure rate not evaluated - only $sampleSize connection attempt(s) in window (minimum $MinimumSampleSize required). "
 }
 elseif ($result.FailureRatePercent -ge $FailureThreshold) {
     $result.OverallStatus = "Warning"
@@ -332,6 +357,10 @@ $statusColor = switch ($result.OverallStatus) {
     "Critical" { 'Red' }
 }
 Write-Host "Status: $($result.OverallStatus)" -ForegroundColor $statusColor
+
+if ($sampleSize -lt $MinimumSampleSize -and $result.BrokerServiceStatus -eq 'Running') {
+    Write-Host "Note: only $sampleSize connection attempt(s) in this window (minimum $MinimumSampleSize needed to evaluate failure rate) - reporting Healthy based on service status." -ForegroundColor DarkGray
+}
 
 if ($result.Notes) {
     Write-Host "Notes: $($result.Notes)" -ForegroundColor Yellow
