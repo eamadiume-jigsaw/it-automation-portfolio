@@ -19,11 +19,14 @@ An Ansible role that applies the same security hardening goals as the DSC baseli
 ### 4. [Network Device Monitor & Auto-Remediation](./network-monitor)
 A Python monitoring tool that pings network devices (routers, switches, firewalls, servers) on a schedule, logs uptime history to SQLite, sends Microsoft Teams alerts on sustained failure, and attempts gated auto-remediation — restarting a Windows service via WinRM — but only on devices explicitly flagged as safe to touch. Production network gear stays monitor-and-alert-only by design, so a bug in the remediation logic can never reach it.
 
-### 5. [AWS EC2 Provisioning (Terraform) & Monitoring (boto3)](./aws-terraform-ec2-monitor)
-A two-part AWS project: EC2 web infrastructure provisioned declaratively with Terraform — including a dynamic AMI lookup instead of a hardcoded, staleness-prone image ID — alongside a Python/boto3 script that reports live instance state and CloudWatch CPU metrics across regions. Built to extend the same declarative-infrastructure mindset from the DSC and Ansible projects onto a public cloud platform.
+### 5. [AWS EC2, VPC & S3 Provisioning (Terraform) & Monitoring (boto3)](./aws-terraform-ec2-monitor)
+A multi-part AWS project: a custom VPC with a public subnet hosting an EC2 web server, an S3 bucket, all provisioned declaratively with Terraform, and a Python/boto3 script that reports live EC2 instance state, CloudWatch CPU metrics, and S3 bucket status across regions.
 
 ### 6. [RDS Broker Health Check](./rds-broker-health-check)
 A PowerShell health-check tool that monitors Remote Desktop Services broker health independently of Windows Server Manager's console — which can report a false "no deployment exists" error on legacy TS Session Broker farm configurations even when the deployment is fully functional. Checks the RD Connection Broker and WID service status, parses the Session Broker event log for real connection activity (successful logons vs. timeouts) over a configurable lookback window, logs results to CSV for historical tracking, and optionally sends email alerts via Microsoft Graph using certificate-based app-only authentication — scoped to a single sender mailbox via an Exchange Online Application Access Policy rather than tenant-wide send rights. Runs on a schedule via Windows Task Scheduler.
+
+### 7. [Secure Web App Architecture: Case Study](./aws-secure-web-app-case-study)
+A complete AWS architecture built to solve a realistic business requirement: an internet-facing web app backed by a database that must never be directly reachable from the internet, deployed entirely by a least-privilege IAM identity with no standing admin access. Includes a custom VPC with public and private subnet separation across two Availability Zones, an EC2 web server, an RDS MySQL database whose isolation was proven with live connectivity tests (blocked from the internet, reachable only from the app server), and AWS Systems Manager Session Manager as a port-22-independent access method. The IAM policy was scoped iteratively against real `AccessDenied` errors from the actual build rather than guessed upfront, and IAM management is kept in a fully separate Terraform project from infrastructure management, mirroring a real separation-of-duties principle.
 
 ## Skills demonstrated across these projects
 
@@ -37,8 +40,8 @@ A PowerShell health-check tool that monitors Remote Desktop Services broker heal
 - Ansible Vault credential encryption
 - Python scripting: network monitoring, SQLite logging, webhook alerting, WinRM automation via pywinrm
 - Infrastructure as Code with Terraform: dynamic resource lookups, security group design, automated provisioning via user_data
-- AWS: EC2, IAM (least-privilege user setup, MFA), CloudWatch metrics, boto3/AWS SDK for Python
+- AWS: EC2, VPC (public/private subnet design, NAT Gateway, route tables), RDS, S3, IAM (least-privilege policy design, iterative scoping against real errors, separation of duties), Systems Manager Session Manager, CloudWatch metrics, boto3/AWS SDK for Python
 - Windows Remote Desktop Services (RD Connection Broker) health monitoring: service status checks, Windows Event Log parsing, CSV-based historical logging, Graph-based email alerting scoped via Exchange Online Application Access Policy
 - Environment-variable-based credential handling (no hardcoded secrets)
 - Deliberate blast-radius/safety design for automation touching production systems
-- Systematic troubleshooting of real infrastructure issues (RBAC propagation delays, WinRM/firewall configuration, module scope conflicts, UAC remote token restrictions, VPN subnet routing gaps, free-tier instance type eligibility across AWS regions)
+- Systematic troubleshooting of real infrastructure issues (RBAC propagation delays, WinRM/firewall configuration, module scope conflicts, UAC remote token restrictions, VPN subnet routing gaps, free-tier instance type eligibility across AWS regions, corporate endpoint security blocking outbound SSH, IAM service-linked role bootstrapping)
