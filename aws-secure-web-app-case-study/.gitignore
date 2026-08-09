@@ -1,0 +1,8 @@
+*.pem
+*.tfstate
+*.tfstate.*
+.terraform/
+.terraform.lock.hcl
+__pycache__/
+*.pyc
+trust-policy.json
