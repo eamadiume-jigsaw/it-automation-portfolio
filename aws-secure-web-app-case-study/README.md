@@ -14,20 +14,24 @@ A company needs an internet-facing web application backed by a database, with th
 
 ## Architecture
 
-Internet
-                   │
-             Internet Gateway
-                   │
-          ┌────────┴────────┐
-          │  Public Subnet   │
-          │  - EC2 (web app) │
-          └────────┬────────┘
-                   │
-          ┌────────┴────────┐
-          │ Private Subnets  │  (2 AZs, required by RDS)
-          │  - RDS database  │
-          └─────────────────┘
+## Architecture
 
+```
+                        Internet
+                            |
+                     Internet Gateway
+                            |
+        +--------------------------------------+
+        |              Public Subnet            |
+        |            - EC2 (web app)            |
+        +--------------------------------------+
+                            |
+        +--------------------------------------+
+        |     Private Subnets (2 AZs, required   |
+        |             by RDS)                   |
+        |           - RDS database              |
+        +--------------------------------------+
+```
           - **VPC** with one public subnet (web tier) and two private subnets across separate Availability Zones (required by RDS for its subnet group, even for a single non-Multi-AZ instance)
 - **EC2** instance in the public subnet running nginx, reachable over HTTP
 - **RDS MySQL** instance in the private subnets, `publicly_accessible = false`, with a security group that only accepts inbound MySQL traffic from the web server's security group — not from any IP range
