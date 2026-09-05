@@ -12,8 +12,7 @@ terraform {
 }
 
 provider "aws" {
-  region  = "eu-west-2"
-  profile = "cloud-engineer-scoped"
+  region = "eu-west-2"
 }
 
 data "aws_ami" "amazon_linux_2023" {
