@@ -12,7 +12,7 @@ terraform {
 }
 
 provider "aws" {
-  region = "eu-west-2"
+  region  = "eu-west-2"
   profile = "cloud-engineer-scoped"
 }
 
@@ -49,9 +49,9 @@ resource "aws_vpc" "main" {
 
 resource "aws_subnet" "public" {
   vpc_id                  = aws_vpc.main.id
-  cidr_block               = "10.0.1.0/24"
-  availability_zone        = data.aws_availability_zones.available.names[0]
-  map_public_ip_on_launch  = true
+  cidr_block              = "10.0.1.0/24"
+  availability_zone       = data.aws_availability_zones.available.names[0]
+  map_public_ip_on_launch = true
 
   tags = {
     Name = "terraform-web-public-subnet"
@@ -187,18 +187,18 @@ resource "random_password" "db_password" {
 }
 
 resource "aws_db_instance" "main" {
-  identifier              = "terraform-web-db"
-  engine                  = "mysql"
-  engine_version          = "8.0"
-  instance_class          = "db.t3.micro"
-  allocated_storage       = 20
-  db_subnet_group_name    = aws_db_subnet_group.main.name
-  vpc_security_group_ids  = [aws_security_group.db_sg.id]
-  username                = "admin"
-  password                = random_password.db_password.result
-  publicly_accessible     = false
-  skip_final_snapshot     = true
-  deletion_protection     = false
+  identifier             = "terraform-web-db"
+  engine                 = "mysql"
+  engine_version         = "8.0"
+  instance_class         = "db.t3.micro"
+  allocated_storage      = 20
+  db_subnet_group_name   = aws_db_subnet_group.main.name
+  vpc_security_group_ids = [aws_security_group.db_sg.id]
+  username               = "admin"
+  password               = random_password.db_password.result
+  publicly_accessible    = false
+  skip_final_snapshot    = true
+  deletion_protection    = false
 
   tags = {
     Name = "terraform-web-db"
