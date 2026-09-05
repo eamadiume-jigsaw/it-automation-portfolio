@@ -10,7 +10,7 @@ terraform {
     }
   }
 
-    backend "s3" {
+  backend "s3" {
     bucket       = "eamadiume-cicd-tfstate"
     key          = "ci-cd-pipeline/terraform.tfstate"
     region       = "eu-west-2"
