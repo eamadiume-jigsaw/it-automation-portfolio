@@ -1,0 +1,33 @@
+services:
+  elasticmq:
+    image: softwaremill/elasticmq-native:1.5.7
+    ports:
+      - "9324:9324"
+    volumes:
+      - ./elasticmq.conf:/opt/elasticmq.conf
+
+  api:
+    build: ./api
+    ports:
+      - "8000:8000"
+    environment:
+      QUEUE_URL: "http://elasticmq:9324/queue/events"
+      SQS_ENDPOINT_URL: "http://elasticmq:9324"
+      AWS_REGION: "us-east-1"
+    depends_on:
+      - elasticmq
+
+  worker:
+    build: ./worker
+    environment:
+      QUEUE_URL: "http://elasticmq:9324/queue/events"
+      SQS_ENDPOINT_URL: "http://elasticmq:9324"
+      AWS_REGION: "us-east-1"
+      DB_PATH: "/data/events.db"
+    volumes:
+      - worker-data:/data
+    depends_on:
+      - elasticmq
+
+volumes:
+  worker-data:
