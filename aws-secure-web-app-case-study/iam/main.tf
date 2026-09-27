@@ -11,36 +11,6 @@ provider "aws" {
   region = "eu-west-2"
 }
 
-# Permissions boundary for the serverless-incident-api Lambda roles. The
-# cloud-engineer user can only create/modify incident-api-* roles when this
-# boundary is attached, so it caps what any role they create can ever do --
-# without it, iam:CreateRole + iam:PassRole would be a privilege-escalation path.
-resource "aws_iam_policy" "incident_api_lambda_boundary" {
-  name        = "incident-api-lambda-boundary"
-  description = "Maximum permissions for incident-api Lambda execution roles"
-
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Sid    = "IncidentTableItemAccess"
-        Effect = "Allow"
-        Action = [
-          "dynamodb:PutItem", "dynamodb:GetItem", "dynamodb:UpdateItem",
-          "dynamodb:DeleteItem", "dynamodb:Query", "dynamodb:Scan"
-        ]
-        Resource = "arn:aws:dynamodb:eu-west-2:*:table/incident-api-*"
-      },
-      {
-        Sid      = "LambdaLogWrite"
-        Effect   = "Allow"
-        Action   = ["logs:CreateLogStream", "logs:PutLogEvents"]
-        Resource = "arn:aws:logs:eu-west-2:*:log-group:/aws/lambda/incident-api-*:*"
-      }
-    ]
-  })
-}
-
 resource "aws_iam_policy" "cloud_engineer_scoped" {
   name        = "cloud-engineer-project-policy"
   description = "Least-privilege policy scoped to specific actions needed for VPC/EC2/RDS/S3 project work"
@@ -53,10 +23,7 @@ resource "aws_iam_policy" "cloud_engineer_scoped" {
         Effect = "Allow"
         Action = [
           "ec2:CreateVpc", "ec2:DeleteVpc", "ec2:DescribeVpcs", "ec2:ModifyVpcAttribute",
-          "ec2:DescribeVpcAttribute", "ec2:DescribeInstanceAttribute", "ec2:DescribeVolumes", "ec2:DescribeVolumeAttribute",
-          "ec2:DescribeNetworkInterfaces", "ec2:DescribeNetworkInterfaceAttribute",
-          "ec2:DescribeInstanceCreditSpecifications", "ec2:DescribeInstanceStatus",
-          "ec2:DescribeSecurityGroupRules", "ec2:DescribeAddressesAttribute", "ec2:DescribeNatGateways", "ec2:DisassociateAddress",
+          "ec2:DescribeVpcAttribute",
           "ec2:CreateSubnet", "ec2:DeleteSubnet", "ec2:DescribeSubnets", "ec2:ModifySubnetAttribute",
           "ec2:CreateInternetGateway", "ec2:DeleteInternetGateway", "ec2:AttachInternetGateway",
           "ec2:DetachInternetGateway", "ec2:DescribeInternetGateways",
@@ -64,12 +31,18 @@ resource "aws_iam_policy" "cloud_engineer_scoped" {
           "ec2:CreateRouteTable", "ec2:DeleteRouteTable", "ec2:CreateRoute", "ec2:DeleteRoute",
           "ec2:AssociateRouteTable", "ec2:DisassociateRouteTable", "ec2:DescribeRouteTables",
           "ec2:AllocateAddress", "ec2:ReleaseAddress", "ec2:DescribeAddresses",
+          "ec2:DescribeAddressesAttribute", "ec2:DisassociateAddress",
           "ec2:CreateSecurityGroup", "ec2:DeleteSecurityGroup", "ec2:DescribeSecurityGroups",
           "ec2:AuthorizeSecurityGroupIngress", "ec2:AuthorizeSecurityGroupEgress",
           "ec2:RevokeSecurityGroupIngress", "ec2:RevokeSecurityGroupEgress",
+          "ec2:DescribeSecurityGroupRules",
           "ec2:DescribeAvailabilityZones",
           "ec2:RunInstances", "ec2:TerminateInstances", "ec2:StopInstances", "ec2:StartInstances",
           "ec2:DescribeInstances", "ec2:DescribeInstanceTypes", "ec2:DescribeImages",
+          "ec2:DescribeInstanceAttribute", "ec2:DescribeInstanceCreditSpecifications",
+          "ec2:DescribeInstanceStatus",
+          "ec2:DescribeVolumes", "ec2:DescribeVolumeAttribute",
+          "ec2:DescribeNetworkInterfaces", "ec2:DescribeNetworkInterfaceAttribute",
           "ec2:CreateKeyPair", "ec2:DeleteKeyPair", "ec2:DescribeKeyPairs",
           "ec2:CreateTags", "ec2:DeleteTags", "ec2:DescribeTags"
         ]
@@ -113,94 +86,78 @@ resource "aws_iam_policy" "cloud_engineer_scoped" {
         ]
         Resource = "*"
       },
-      # --- serverless-incident-api: everything below is scoped to incident-api-* ---
       {
-        Sid    = "IncidentApiLambda"
+        Sid    = "DynamoDBStateLocking"
         Effect = "Allow"
         Action = [
-          "lambda:CreateFunction", "lambda:DeleteFunction",
-          "lambda:GetFunction", "lambda:GetFunctionConfiguration",
-          "lambda:UpdateFunctionCode", "lambda:UpdateFunctionConfiguration",
-          "lambda:ListVersionsByFunction", "lambda:GetFunctionCodeSigningConfig",
-          "lambda:AddPermission", "lambda:RemovePermission", "lambda:GetPolicy",
-          "lambda:ListTags", "lambda:TagResource", "lambda:UntagResource"
+          "dynamodb:CreateTable", "dynamodb:DeleteTable", "dynamodb:DescribeTable",
+          "dynamodb:GetItem", "dynamodb:PutItem", "dynamodb:DeleteItem"
         ]
-        Resource = "arn:aws:lambda:eu-west-2:*:function:incident-api-*"
+        Resource = "arn:aws:dynamodb:eu-west-2:751835847368:table/terraform-locks"
       },
       {
         Sid    = "IncidentApiDynamoDB"
         Effect = "Allow"
         Action = [
-          "dynamodb:CreateTable", "dynamodb:DeleteTable", "dynamodb:UpdateTable",
-          "dynamodb:DescribeTable", "dynamodb:DescribeContinuousBackups",
-          "dynamodb:DescribeTimeToLive", "dynamodb:ListTagsOfResource",
-          "dynamodb:TagResource", "dynamodb:UntagResource"
+          "dynamodb:CreateTable", "dynamodb:DeleteTable", "dynamodb:DescribeTable",
+          "dynamodb:TagResource", "dynamodb:DescribeContinuousBackups",
+          "dynamodb:DescribeTimeToLive", "dynamodb:ListTagsOfResource"
         ]
-        Resource = "arn:aws:dynamodb:eu-west-2:*:table/incident-api-*"
+        Resource = "arn:aws:dynamodb:eu-west-2:751835847368:table/incident-api-*"
+      },
+         {
+        Sid    = "IncidentApiLambda"
+        Effect = "Allow"
+        Action = [
+          "lambda:CreateFunction", "lambda:DeleteFunction", "lambda:GetFunction",
+          "lambda:UpdateFunctionCode", "lambda:UpdateFunctionConfiguration",
+          "lambda:AddPermission", "lambda:RemovePermission", "lambda:GetPolicy",
+          "lambda:ListVersionsByFunction", "lambda:TagResource",
+          "lambda:GetFunctionCodeSigningConfig"
+        ]
+        Resource = "arn:aws:lambda:eu-west-2:751835847368:function:incident-api-*"
       },
       {
-        # HTTP API IDs are random, so these can't be name-scoped -- limited to
-        # the API Gateway v2 /apis paths in this region instead.
-        Sid    = "IncidentApiGateway"
+        Sid    = "IncidentApiApiGateway"
         Effect = "Allow"
         Action = [
           "apigateway:GET", "apigateway:POST", "apigateway:PUT",
-          "apigateway:PATCH", "apigateway:DELETE"
+          "apigateway:DELETE", "apigateway:PATCH"
         ]
-        Resource = [
-          "arn:aws:apigateway:eu-west-2::/apis",
-          "arn:aws:apigateway:eu-west-2::/apis/*",
-          "arn:aws:apigateway:eu-west-2::/tags/*"
-        ]
+        Resource = "arn:aws:apigateway:eu-west-2::/*"
       },
       {
-        Sid    = "IncidentApiLogGroups"
+        Sid    = "IncidentApiIAMRolesCreateDelete"
         Effect = "Allow"
         Action = [
-          "logs:CreateLogGroup", "logs:DeleteLogGroup",
-          "logs:PutRetentionPolicy", "logs:DeleteRetentionPolicy",
-          "logs:ListTagsLogGroup", "logs:ListTagsForResource",
-          "logs:TagResource", "logs:UntagResource",
-          "logs:DescribeLogStreams", "logs:GetLogEvents", "logs:FilterLogEvents"
+          "iam:CreateRole", "iam:DeleteRole", "iam:PassRole"
         ]
-        Resource = "arn:aws:logs:eu-west-2:*:log-group:/aws/lambda/incident-api-*"
-      },
-      {
-        Sid      = "LogGroupDiscovery"
-        Effect   = "Allow"
-        Action   = ["logs:DescribeLogGroups"]
-        Resource = "*"
-      },
-      {
-        # Creating or changing a role's inline policy is only allowed when the
-        # role carries the incident-api boundary. No AttachRolePolicy, and no
-        # Put/DeleteRolePermissionsBoundary, so the boundary can't be swapped out.
-        Sid      = "IncidentApiRoleWriteWithBoundary"
-        Effect   = "Allow"
-        Action   = ["iam:CreateRole", "iam:PutRolePolicy", "iam:DeleteRolePolicy"]
-        Resource = "arn:aws:iam::*:role/incident-api-*"
+        Resource = "arn:aws:iam::751835847368:role/incident-api-*"
         Condition = {
-          StringEquals = { "iam:PermissionsBoundary" = aws_iam_policy.incident_api_lambda_boundary.arn }
+          StringEquals = {
+            "iam:PermissionsBoundary" = "arn:aws:iam::751835847368:policy/incident-api-lambda-boundary"
+          }
         }
       },
-      {
-        Sid    = "IncidentApiRoleReadAndDelete"
+            {
+        Sid    = "IncidentApiIAMRolesReadAndPolicy"
         Effect = "Allow"
         Action = [
-          "iam:GetRole", "iam:GetRolePolicy", "iam:ListRolePolicies",
-          "iam:ListAttachedRolePolicies", "iam:ListInstanceProfilesForRole",
-          "iam:DeleteRole"
+          "iam:GetRole", "iam:ListRolePolicies", "iam:ListAttachedRolePolicies",
+          "iam:ListInstanceProfilesForRole",
+          "iam:PutRolePolicy", "iam:DeleteRolePolicy", "iam:GetRolePolicy"
         ]
-        Resource = "arn:aws:iam::*:role/incident-api-*"
+        Resource = "arn:aws:iam::751835847368:role/incident-api-*"
       },
-      {
-        Sid      = "IncidentApiPassRoleToLambda"
-        Effect   = "Allow"
-        Action   = ["iam:PassRole"]
-        Resource = "arn:aws:iam::*:role/incident-api-*"
-        Condition = {
-          StringEquals = { "iam:PassedToService" = "lambda.amazonaws.com" }
-        }
+            {
+        Sid    = "IncidentApiCloudWatchLogs"
+        Effect = "Allow"
+        Action = [
+          "logs:CreateLogGroup", "logs:DeleteLogGroup", "logs:DescribeLogGroups",
+          "logs:PutRetentionPolicy", "logs:TagResource", "logs:ListTagsForResource",
+          "logs:FilterLogEvents", "logs:GetLogEvents", "logs:DescribeLogStreams"
+        ]
+        Resource = "arn:aws:logs:eu-west-2:751835847368:log-group:*"
       }
     ]
   })
@@ -226,4 +183,102 @@ output "cloud_engineer_access_key_id" {
 output "cloud_engineer_secret_key" {
   value     = aws_iam_access_key.cloud_engineer_key.secret
   sensitive = true
+}
+
+resource "aws_iam_policy" "incident_api_lambda_boundary" {
+  name        = "incident-api-lambda-boundary"
+  description = "Permissions boundary capping what incident-api Lambda execution roles can ever do, regardless of what policy is attached to them"
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "DynamoDBTableAccessOnly"
+        Effect = "Allow"
+        Action = [
+          "dynamodb:PutItem", "dynamodb:GetItem", "dynamodb:Scan"
+        ]
+        Resource = "arn:aws:dynamodb:eu-west-2:751835847368:table/incident-api-incidents"
+      },
+      {
+        Sid    = "LambdaLoggingOnly"
+        Effect = "Allow"
+        Action = [
+          "logs:CreateLogStream", "logs:PutLogEvents"
+        ]
+        Resource = "arn:aws:logs:eu-west-2:751835847368:log-group:/aws/lambda/incident-api-*:*"
+      }
+    ]
+  })
+}
+
+# --- eamadiume.com personal site -------------------------------------------
+# Kept in its own managed policy: cloud-engineer-project-policy is near the
+# 6,144-character limit for a managed policy. Scoped to the one existing
+# distribution, OAC, hosted zone and certificate, with deliberately NO Delete*
+# actions on them -- this user can manage the live site but can't take it down.
+# (S3 bucket/object access is covered by S3Access in the project policy.)
+resource "aws_iam_policy" "cloud_engineer_site" {
+  name        = "cloud-engineer-site-policy"
+  description = "Manage the eamadiume.com site (CloudFront, Route 53, ACM read) without delete rights"
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "SiteCloudFront"
+        Effect = "Allow"
+        Action = [
+          "cloudfront:GetDistribution", "cloudfront:GetDistributionConfig",
+          "cloudfront:UpdateDistribution", "cloudfront:ListTagsForResource",
+          "cloudfront:TagResource", "cloudfront:UntagResource",
+          "cloudfront:CreateInvalidation", "cloudfront:GetInvalidation",
+          "cloudfront:ListInvalidations"
+        ]
+        Resource = "arn:aws:cloudfront::751835847368:distribution/E1UXEDP6OVJFS5"
+      },
+      {
+        Sid    = "SiteCloudFrontOAC"
+        Effect = "Allow"
+        Action = [
+          "cloudfront:GetOriginAccessControl", "cloudfront:GetOriginAccessControlConfig",
+          "cloudfront:UpdateOriginAccessControl"
+        ]
+        Resource = "arn:aws:cloudfront::751835847368:origin-access-control/E1J94FGWBCC2Z8"
+      },
+      {
+        Sid    = "SiteRoute53Zone"
+        Effect = "Allow"
+        Action = [
+          "route53:GetHostedZone", "route53:ListResourceRecordSets",
+          "route53:ChangeResourceRecordSets", "route53:ListTagsForResource",
+          "route53:ChangeTagsForResource"
+        ]
+        Resource = "arn:aws:route53:::hostedzone/Z04662192WP5WES78YW7L"
+      },
+      {
+        Sid      = "Route53ChangeStatus"
+        Effect   = "Allow"
+        Action   = ["route53:GetChange"]
+        Resource = "arn:aws:route53:::change/*"
+      },
+      {
+        Sid      = "SiteCertificateRead"
+        Effect   = "Allow"
+        Action   = ["acm:DescribeCertificate", "acm:ListTagsForCertificate", "acm:AddTagsToCertificate"]
+        Resource = "arn:aws:acm:us-east-1:751835847368:certificate/444706e8-c0c3-42ec-935e-868210346857"
+      },
+      {
+        Sid      = "SiteBucketPolicyWrite"
+        Effect   = "Allow"
+        Action   = ["s3:PutBucketPolicy"]
+        Resource = "arn:aws:s3:::eamadiume-site"
+      }
+    ]
+  })
+}
+
+resource "aws_iam_user_policy_attachment" "cloud_engineer_site_attach" {
+  user       = aws_iam_user.cloud_engineer.name
+  policy_arn = aws_iam_policy.cloud_engineer_site.arn
 }

@@ -41,6 +41,23 @@ This is the modern, recommended pattern (Origin Access Control) rather than the 
 4. Update the S3 bucket policy with the CloudFront-generated statement
 5. Create Route 53 alias records (A + AAAA) for both the root domain and `www`, pointing to the CloudFront distribution
 
+## Infrastructure as Code: adopting the live site into Terraform
+
+The site was originally built by hand in the console. It is now fully managed by Terraform in [`infra/`](infra/), adopted **without recreating or changing anything**:
+
+1. Wrote only Terraform `import` blocks for the 12 live resources: bucket, public-access block, bucket policy, OAC, distribution, ACM certificate (in `us-east-1`), hosted zone, and five DNS records.
+2. Ran `terraform plan -generate-config-out=generated.tf` so Terraform read each live resource and wrote matching configuration.
+3. Cleaned the output into `s3.tf`, `cloudfront.tf`, `acm.tf` and `dns.tf`. Hardcoded IDs became references (the bucket policy uses the distribution's ARN, DNS aliases use CloudFront's domain name), and `prevent_destroy` was added to the bucket, distribution, certificate and zone.
+4. Iterated until the plan read **"12 to import, 0 to add, 0 to change, 0 to destroy"**, applied it, and confirmed `No changes. Your infrastructure matches the configuration.`
+
+State is stored remotely in S3 with native lockfile locking (`eamadiume-cicd-tfstate`, key `eamadiume-site/terraform.tfstate`).
+
+**Problems hit during the import:**
+
+- **Config generation produced invalid Route 53 records.** Alias records were generated with `records` and `ttl` as well as an `alias` block, which the provider rejects, and CNAMEs got a `multivalue_answer_routing_policy` without a `set_identifier`. Fixed by hand-writing those resources.
+- **Provider defaults showing up as drift.** The hosted zone had no comment, but the provider defaults an unset comment to "Managed by Terraform", so the first plan wanted to change it. Setting `comment = ""` explicitly matched the live zone. Tags added through the provider's `default_tags` were removed for the same reason, so the import could be proven change-free before any deliberate changes.
+- **IAM managed-policy size limit.** Adding the site permissions to the existing deployer policy failed with `LimitExceeded: Cannot exceed quota for PolicySize: 6144`. The site permissions now live in a separate `cloud-engineer-site-policy` attached to the same user. It is scoped to this one distribution, OAC, hosted zone and certificate, with **no delete permissions**, so the deploying identity can manage the site but not take it down.
+
 ## Known issues hit during this deployment
 
 - **Root plan cannot register domains through Route 53** — the AWS account's Free plan tier blocks domain registration specifically; the domain was registered externally at Namecheap instead, with nameservers delegated to a Route 53 hosted zone for DNS management.
