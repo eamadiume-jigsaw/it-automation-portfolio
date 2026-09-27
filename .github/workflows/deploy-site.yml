@@ -1,0 +1,82 @@
+name: Deploy eamadiume.com
+
+# Publishes the site whenever the page changes on main.
+# Auth is GitHub OIDC -> github-actions-site-deploy-role (no stored AWS keys).
+# That role can only PutObject the one page and invalidate the one distribution.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'eamadiume-personal-site/index.html'
+      - '.github/workflows/deploy-site.yml'
+  workflow_dispatch:
+
+# Never run two deploys at once; a newer push waits for the current one.
+concurrency:
+  group: deploy-site
+  cancel-in-progress: false
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  AWS_REGION: eu-west-2
+  AWS_ROLE_ARN: arn:aws:iam::751835847368:role/github-actions-site-deploy-role
+  BUCKET: eamadiume-site
+  DISTRIBUTION_ID: E1UXEDP6OVJFS5
+  SITE_URL: https://eamadiume.com
+  PAGE: eamadiume-personal-site/index.html
+
+jobs:
+  deploy:
+    name: Deploy
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Sanity-check the page before publishing
+        run: |
+          test -s "$PAGE" || { echo "::error::$PAGE is missing or empty"; exit 1; }
+          grep -qi '</html>' "$PAGE" || { echo "::error::$PAGE has no closing </html> tag (truncated file?)"; exit 1; }
+          echo "Page OK: $(wc -c < "$PAGE") bytes"
+
+      - name: Configure AWS credentials via OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ env.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Upload to S3
+        run: |
+          aws s3 cp "$PAGE" "s3://$BUCKET/index.html" \
+            --content-type "text/html; charset=utf-8" \
+            --cache-control "public, max-age=300"
+
+      - name: Invalidate CloudFront cache
+        run: |
+          ID=$(aws cloudfront create-invalidation \
+                 --distribution-id "$DISTRIBUTION_ID" \
+                 --paths "/" "/index.html" \
+                 --query Invalidation.Id --output text)
+          echo "Invalidation $ID created; waiting for it to complete..."
+          aws cloudfront wait invalidation-completed \
+            --distribution-id "$DISTRIBUTION_ID" --id "$ID"
+
+      - name: Verify the live site serves this commit
+        run: |
+          expected=$(sha256sum "$PAGE" | cut -d' ' -f1)
+          for attempt in 1 2 3 4 5 6; do
+            status=$(curl -s -o live.html -w '%{http_code}' "$SITE_URL/")
+            actual=$(sha256sum live.html | cut -d' ' -f1)
+            echo "Attempt $attempt: HTTP $status, hash ${actual:0:12} (expected ${expected:0:12})"
+            if [ "$status" = "200" ] && [ "$actual" = "$expected" ]; then
+              echo "Live site matches commit ${GITHUB_SHA:0:7}"
+              exit 0
+            fi
+            sleep 10
+          done
+          echo "::error::$SITE_URL did not serve the deployed page after 6 attempts"
+          exit 1
