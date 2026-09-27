@@ -282,3 +282,60 @@ resource "aws_iam_user_policy_attachment" "cloud_engineer_site_attach" {
   user       = aws_iam_user.cloud_engineer.name
   policy_arn = aws_iam_policy.cloud_engineer_site.arn
 }
+
+# --- GitHub Actions: eamadiume.com deploy role -----------------------------
+# Assumed via OIDC by .github/workflows/deploy-site.yml. Separate from the
+# Terraform CI role and far narrower: it can upload the one page and
+# invalidate the one distribution, and can only be assumed by workflows
+# running on main in this repository.
+data "aws_iam_openid_connect_provider" "github" {
+  url = "https://token.actions.githubusercontent.com"
+}
+
+resource "aws_iam_role" "site_deploy" {
+  name                 = "github-actions-site-deploy-role"
+  description          = "OIDC role for GitHub Actions to deploy eamadiume.com"
+  max_session_duration = 3600
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect    = "Allow"
+      Principal = { Federated = data.aws_iam_openid_connect_provider.github.arn }
+      Action    = "sts:AssumeRoleWithWebIdentity"
+      Condition = {
+        StringEquals = {
+          "token.actions.githubusercontent.com:aud" = "sts.amazonaws.com"
+          "token.actions.githubusercontent.com:sub" = "repo:eamadiume-jigsaw/it-automation-portfolio:ref:refs/heads/main"
+        }
+      }
+    }]
+  })
+}
+
+resource "aws_iam_role_policy" "site_deploy" {
+  name = "site-deploy"
+  role = aws_iam_role.site_deploy.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid      = "UploadSitePage"
+        Effect   = "Allow"
+        Action   = ["s3:PutObject"]
+        Resource = "arn:aws:s3:::eamadiume-site/index.html"
+      },
+      {
+        Sid      = "InvalidateSiteCache"
+        Effect   = "Allow"
+        Action   = ["cloudfront:CreateInvalidation", "cloudfront:GetInvalidation"]
+        Resource = "arn:aws:cloudfront::751835847368:distribution/E1UXEDP6OVJFS5"
+      }
+    ]
+  })
+}
+
+output "site_deploy_role_arn" {
+  value = aws_iam_role.site_deploy.arn
+}
