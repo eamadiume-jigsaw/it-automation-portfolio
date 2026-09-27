@@ -37,7 +37,12 @@ The functionality is deliberately simple. The focus is on **least-privilege IAM 
 
 **1. One role per function, one action per role.** Rather than sharing a single "Lambda role", each function gets its own role, whose inline policy grants exactly one DynamoDB action on the one table ARN, plus `logs:CreateLogStream`/`logs:PutLogEvents` on its own log group. The create function can't read, and the read functions can't write.
 
-**2. Permissions boundary on every role.** All three roles carry `incident-api-lambda-boundary`. The deploying IAM user (`cloud-engineer-project-policy`) is only allowed to create `incident-api-*` roles *with that boundary attached*. So even if someone later widened an inline policy to `dynamodb:*` or `iam:*`, the boundary would still cap the role at table + log access. The boundary and the deployer policy are managed outside this stack, so they survive `terraform destroy`.
+**2. Permissions boundary on every role.** All three roles carry `incident-api-lambda-boundary`. The deploying IAM user (`cloud-engineer-project-policy`) is only allowed to create `incident-api-*` roles *with that boundary attached*. The two layers do different jobs:
+
+- The **inline policy** is the fine-grained layer: one DynamoDB action per function.
+- The **boundary** is the outer ceiling: item-level DynamoDB actions on `incident-api-*` tables, plus writing to `/aws/lambda/incident-api-*` log groups, and nothing else. If an inline policy were later widened to `iam:*`, `s3:*` or table-management actions such as `dynamodb:DeleteTable`, the boundary would still block them. It does *not* stop a widened inline policy from adding other item actions (e.g. `DeleteItem`) on the incident tables; that is left to the inline policy and code review.
+
+The boundary and the deployer policy are defined in [`aws-secure-web-app-case-study/iam/main.tf`](../aws-secure-web-app-case-study/iam/main.tf), the portfolio's separate IAM-management Terraform project, so they survive `terraform destroy` of this stack. The deployer can only `CreateRole`/`PutRolePolicy` on `incident-api-*` roles when the boundary is attached, has no `AttachRolePolicy` or `PutRolePermissionsBoundary` (so the boundary can't be swapped out), and can only `PassRole` those roles to Lambda.
 
 **3. Route-scoped invoke permissions.** Each `aws_lambda_permission` uses a `source_arn` tied to that function's own route, so for example `create_incident` can't be invoked through `GET /incidents`.
 
@@ -52,6 +57,8 @@ Simulating `incident-api-create-incident-role` with its inline policy **and** th
 | `dynamodb:PutItem` | `table/incident-api-incidents` | ✅ Allowed | Explicit allow in 1 statement |
 | `dynamodb:DeleteItem` | `table/incident-api-incidents` | ⛔ Denied | Implicitly denied by a permissions boundary |
 | `iam:CreateUser` | `*` | ⛔ Denied | Implicitly denied by a permissions boundary |
+
+How to read these: the simulator reports both denials as "implicitly denied by a permissions boundary", but they are denied for different reasons. `iam:CreateUser` is outside the boundary entirely, so no inline policy could ever grant it. `DeleteItem` *is* within the boundary; it's denied because the create role's inline policy doesn't grant it. The effective permission is the intersection of the two, and in both cases that intersection is empty.
 
 ![IAM Policy Simulator results](docs/iam-policy-simulator.png)
 
@@ -120,7 +127,7 @@ HTTP 200
                            {"device": "rds-broker-01", "severity": "critical", "message": "connection pool exhausted", ...}]}
 ```
 
-The `DELETE` result is worth noting. There is no delete route, so API Gateway rejects the request itself, and even if one were added, no role has `DeleteItem` (confirmed in the simulator above).
+The `DELETE` result is worth noting. There is no delete route, so API Gateway rejects the request itself, and even if one were added, no role's inline policy grants `DeleteItem` (confirmed in the simulator above).
 
 ## Project layout
 

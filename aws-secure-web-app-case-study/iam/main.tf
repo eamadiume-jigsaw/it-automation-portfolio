@@ -11,6 +11,36 @@ provider "aws" {
   region = "eu-west-2"
 }
 
+# Permissions boundary for the serverless-incident-api Lambda roles. The
+# cloud-engineer user can only create/modify incident-api-* roles when this
+# boundary is attached, so it caps what any role they create can ever do --
+# without it, iam:CreateRole + iam:PassRole would be a privilege-escalation path.
+resource "aws_iam_policy" "incident_api_lambda_boundary" {
+  name        = "incident-api-lambda-boundary"
+  description = "Maximum permissions for incident-api Lambda execution roles"
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "IncidentTableItemAccess"
+        Effect = "Allow"
+        Action = [
+          "dynamodb:PutItem", "dynamodb:GetItem", "dynamodb:UpdateItem",
+          "dynamodb:DeleteItem", "dynamodb:Query", "dynamodb:Scan"
+        ]
+        Resource = "arn:aws:dynamodb:eu-west-2:*:table/incident-api-*"
+      },
+      {
+        Sid      = "LambdaLogWrite"
+        Effect   = "Allow"
+        Action   = ["logs:CreateLogStream", "logs:PutLogEvents"]
+        Resource = "arn:aws:logs:eu-west-2:*:log-group:/aws/lambda/incident-api-*:*"
+      }
+    ]
+  })
+}
+
 resource "aws_iam_policy" "cloud_engineer_scoped" {
   name        = "cloud-engineer-project-policy"
   description = "Least-privilege policy scoped to specific actions needed for VPC/EC2/RDS/S3 project work"
@@ -23,7 +53,7 @@ resource "aws_iam_policy" "cloud_engineer_scoped" {
         Effect = "Allow"
         Action = [
           "ec2:CreateVpc", "ec2:DeleteVpc", "ec2:DescribeVpcs", "ec2:ModifyVpcAttribute",
-          "ec2:DescribeVpcAttribute","ec2:DescribeInstanceAttribute","ec2:DescribeVolumes", "ec2:DescribeVolumeAttribute",
+          "ec2:DescribeVpcAttribute", "ec2:DescribeInstanceAttribute", "ec2:DescribeVolumes", "ec2:DescribeVolumeAttribute",
           "ec2:DescribeNetworkInterfaces", "ec2:DescribeNetworkInterfaceAttribute",
           "ec2:DescribeInstanceCreditSpecifications", "ec2:DescribeInstanceStatus",
           "ec2:DescribeSecurityGroupRules", "ec2:DescribeAddressesAttribute", "ec2:DescribeNatGateways", "ec2:DisassociateAddress",
@@ -82,6 +112,95 @@ resource "aws_iam_policy" "cloud_engineer_scoped" {
           "cloudwatch:DescribeAlarms"
         ]
         Resource = "*"
+      },
+      # --- serverless-incident-api: everything below is scoped to incident-api-* ---
+      {
+        Sid    = "IncidentApiLambda"
+        Effect = "Allow"
+        Action = [
+          "lambda:CreateFunction", "lambda:DeleteFunction",
+          "lambda:GetFunction", "lambda:GetFunctionConfiguration",
+          "lambda:UpdateFunctionCode", "lambda:UpdateFunctionConfiguration",
+          "lambda:ListVersionsByFunction", "lambda:GetFunctionCodeSigningConfig",
+          "lambda:AddPermission", "lambda:RemovePermission", "lambda:GetPolicy",
+          "lambda:ListTags", "lambda:TagResource", "lambda:UntagResource"
+        ]
+        Resource = "arn:aws:lambda:eu-west-2:*:function:incident-api-*"
+      },
+      {
+        Sid    = "IncidentApiDynamoDB"
+        Effect = "Allow"
+        Action = [
+          "dynamodb:CreateTable", "dynamodb:DeleteTable", "dynamodb:UpdateTable",
+          "dynamodb:DescribeTable", "dynamodb:DescribeContinuousBackups",
+          "dynamodb:DescribeTimeToLive", "dynamodb:ListTagsOfResource",
+          "dynamodb:TagResource", "dynamodb:UntagResource"
+        ]
+        Resource = "arn:aws:dynamodb:eu-west-2:*:table/incident-api-*"
+      },
+      {
+        # HTTP API IDs are random, so these can't be name-scoped -- limited to
+        # the API Gateway v2 /apis paths in this region instead.
+        Sid    = "IncidentApiGateway"
+        Effect = "Allow"
+        Action = [
+          "apigateway:GET", "apigateway:POST", "apigateway:PUT",
+          "apigateway:PATCH", "apigateway:DELETE"
+        ]
+        Resource = [
+          "arn:aws:apigateway:eu-west-2::/apis",
+          "arn:aws:apigateway:eu-west-2::/apis/*",
+          "arn:aws:apigateway:eu-west-2::/tags/*"
+        ]
+      },
+      {
+        Sid    = "IncidentApiLogGroups"
+        Effect = "Allow"
+        Action = [
+          "logs:CreateLogGroup", "logs:DeleteLogGroup",
+          "logs:PutRetentionPolicy", "logs:DeleteRetentionPolicy",
+          "logs:ListTagsLogGroup", "logs:ListTagsForResource",
+          "logs:TagResource", "logs:UntagResource",
+          "logs:DescribeLogStreams", "logs:GetLogEvents", "logs:FilterLogEvents"
+        ]
+        Resource = "arn:aws:logs:eu-west-2:*:log-group:/aws/lambda/incident-api-*"
+      },
+      {
+        Sid      = "LogGroupDiscovery"
+        Effect   = "Allow"
+        Action   = ["logs:DescribeLogGroups"]
+        Resource = "*"
+      },
+      {
+        # Creating or changing a role's inline policy is only allowed when the
+        # role carries the incident-api boundary. No AttachRolePolicy, and no
+        # Put/DeleteRolePermissionsBoundary, so the boundary can't be swapped out.
+        Sid      = "IncidentApiRoleWriteWithBoundary"
+        Effect   = "Allow"
+        Action   = ["iam:CreateRole", "iam:PutRolePolicy", "iam:DeleteRolePolicy"]
+        Resource = "arn:aws:iam::*:role/incident-api-*"
+        Condition = {
+          StringEquals = { "iam:PermissionsBoundary" = aws_iam_policy.incident_api_lambda_boundary.arn }
+        }
+      },
+      {
+        Sid    = "IncidentApiRoleReadAndDelete"
+        Effect = "Allow"
+        Action = [
+          "iam:GetRole", "iam:GetRolePolicy", "iam:ListRolePolicies",
+          "iam:ListAttachedRolePolicies", "iam:ListInstanceProfilesForRole",
+          "iam:DeleteRole"
+        ]
+        Resource = "arn:aws:iam::*:role/incident-api-*"
+      },
+      {
+        Sid      = "IncidentApiPassRoleToLambda"
+        Effect   = "Allow"
+        Action   = ["iam:PassRole"]
+        Resource = "arn:aws:iam::*:role/incident-api-*"
+        Condition = {
+          StringEquals = { "iam:PassedToService" = "lambda.amazonaws.com" }
+        }
       }
     ]
   })
