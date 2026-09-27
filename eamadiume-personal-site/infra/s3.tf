@@ -16,6 +16,32 @@ resource "aws_s3_bucket_public_access_block" "site" {
   restrict_public_buckets = true
 }
 
+# Versioning: every deploy keeps the previous page, so a bad release can be
+# rolled back by restoring the prior version. Old versions expire after 30
+# days so storage doesn't grow forever.
+resource "aws_s3_bucket_versioning" "site" {
+  bucket = aws_s3_bucket.site.id
+  versioning_configuration {
+    status = "Enabled"
+  }
+}
+
+resource "aws_s3_bucket_lifecycle_configuration" "site" {
+  bucket = aws_s3_bucket.site.id
+
+  rule {
+    id     = "expire-old-versions"
+    status = "Enabled"
+    filter {}
+
+    noncurrent_version_expiration {
+      noncurrent_days = 30
+    }
+  }
+
+  depends_on = [aws_s3_bucket_versioning.site]
+}
+
 # Only this one distribution may read, and only GetObject.
 resource "aws_s3_bucket_policy" "site" {
   bucket = aws_s3_bucket.site.id

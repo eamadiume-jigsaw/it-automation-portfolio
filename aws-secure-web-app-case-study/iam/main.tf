@@ -269,9 +269,9 @@ resource "aws_iam_policy" "cloud_engineer_site" {
         Resource = "arn:aws:acm:us-east-1:751835847368:certificate/444706e8-c0c3-42ec-935e-868210346857"
       },
       {
-        Sid      = "SiteBucketPolicyWrite"
+        Sid      = "SiteBucketConfigWrite"
         Effect   = "Allow"
-        Action   = ["s3:PutBucketPolicy"]
+        Action   = ["s3:PutBucketPolicy", "s3:PutLifecycleConfiguration"]
         Resource = "arn:aws:s3:::eamadiume-site"
       }
     ]
@@ -338,4 +338,48 @@ resource "aws_iam_role_policy" "site_deploy" {
 
 output "site_deploy_role_arn" {
   value = aws_iam_role.site_deploy.arn
+}
+
+# --- Account cost guardrail --------------------------------------------------
+# Account-wide, so it lives here (admin-applied) rather than in a project the
+# scoped user can change. Email is a variable so it isn't committed to the repo;
+# Terraform prompts for it, or set TF_VAR_budget_alert_email.
+variable "budget_alert_email" {
+  description = "Where AWS Budgets sends cost alerts"
+  type        = string
+}
+
+resource "aws_budgets_budget" "monthly" {
+  name         = "monthly-account-budget"
+  budget_type  = "COST"
+  limit_amount = "10"
+  limit_unit   = "USD"
+  time_unit    = "MONTHLY"
+
+  # $5 actual spend
+  notification {
+    comparison_operator        = "GREATER_THAN"
+    threshold                  = 50
+    threshold_type             = "PERCENTAGE"
+    notification_type          = "ACTUAL"
+    subscriber_email_addresses = [var.budget_alert_email]
+  }
+
+  # $10 actual spend
+  notification {
+    comparison_operator        = "GREATER_THAN"
+    threshold                  = 100
+    threshold_type             = "PERCENTAGE"
+    notification_type          = "ACTUAL"
+    subscriber_email_addresses = [var.budget_alert_email]
+  }
+
+  # Forecast says the month will end above $10 -- early warning
+  notification {
+    comparison_operator        = "GREATER_THAN"
+    threshold                  = 100
+    threshold_type             = "PERCENTAGE"
+    notification_type          = "FORECASTED"
+    subscriber_email_addresses = [var.budget_alert_email]
+  }
 }

@@ -46,6 +46,19 @@ resource "aws_route53_record" "www_a" {
   }
 }
 
+# IPv6 for www, matching the apex (CloudFront has IPv6 enabled).
+resource "aws_route53_record" "www_aaaa" {
+  zone_id = aws_route53_zone.site.zone_id
+  name    = "www.eamadiume.com"
+  type    = "AAAA"
+
+  alias {
+    name                   = aws_cloudfront_distribution.site.domain_name
+    zone_id                = aws_cloudfront_distribution.site.hosted_zone_id
+    evaluate_target_health = false
+  }
+}
+
 # ACM DNS-validation records. They must stay in place so the certificate
 # keeps auto-renewing.
 resource "aws_route53_record" "cert_validation_apex" {
