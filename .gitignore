@@ -1,0 +1,19 @@
+# Terraform: local state, provider cache, plans and crash logs.
+# State files can contain secrets and must never be committed.
+# (.terraform.lock.hcl IS committed, so provider versions are pinned.)
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfplan
+crash.log
+crash.*.log
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+
+# Editor / OS
+.vscode/
+.DS_Store
+Thumbs.db

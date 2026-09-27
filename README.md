@@ -1,9 +1,16 @@
-# IT Infrastructure Automation Portfolio
+# Cloud & Infrastructure Automation Portfolio
 
-Author: Enyioma Amadiume
-IT Infrastructure Specialist | M365, Entra ID, Intune, Hyper-V, Fortinet
+**Enyioma Amadiume**, Senior IT Infrastructure Specialist, moving into cloud and infrastructure engineering
+AWS · Azure · Terraform · Python · PowerShell · GitHub Actions · M365 / Entra ID · [eamadiume.com](https://eamadiume.com)
 
-This repo contains automation projects built to solve real operational problems in a hybrid aviation IT environment (corporate office + hangar infrastructure). Each project was built end-to-end: authentication design, error handling, and unattended scheduled execution — not just one-off scripts.
+Twelve end-to-end projects in two tracks:
+
+- **Cloud engineering (AWS & Azure):** infrastructure defined in Terraform, least-privilege IAM, containers, serverless, and CI/CD with no stored credentials. Each one was built, tested against live infrastructure, documented, and torn down cleanly.
+- **Infrastructure automation:** PowerShell, Python and Ansible tooling built for real operational problems in a hybrid aviation IT environment (corporate office and hangar), designed for unattended scheduled execution with certificate-based authentication.
+
+Every project README documents the real problems hit along the way and how they were diagnosed, not just the finished result.
+
+**Start here:** [Serverless Incident API](./serverless-incident-api) (per-function IAM and permissions boundaries, proven with the Policy Simulator) · [ECS Fargate Log Pipeline](./log-pipeline) (a credential-chain bug that only appeared in AWS) · [Terraform CI/CD with OIDC](./ci-cd-pipeline) (approval-gated applies, no stored keys) · [Secure Web App Case Study](./aws-secure-web-app-case-study) (private RDS, least-privilege deployer)
 
 ## Projects
 
