@@ -1,0 +1,40 @@
+### POST valid
+HTTP 201
+{"incident_id": "3c7d6396-81a3-4cdd-9361-51101e4946b2", "device": "core-sw-01", "severity": "critical", "message": "Uplink port Gi1/0/48 down", "timestamp": "2026-09-27T05:14:11.023043+00:00"}
+
+### GET by id
+HTTP 200
+{"message": "Uplink port Gi1/0/48 down", "incident_id": "3c7d6396-81a3-4cdd-9361-51101e4946b2", "device": "core-sw-01", "severity": "critical", "timestamp": "2026-09-27T05:14:11.023043+00:00"}
+
+### GET list
+HTTP 200
+{"count": 2, "incidents": [{"message": "Uplink port Gi1/0/48 down", "incident_id": "3c7d6396-81a3-4cdd-9361-51101e4946b2", "device": "core-sw-01", "severity": "critical", "timestamp": "2026-09-27T05:14:11.023043+00:00"}, {"message": "connection pool exhausted", "incident_id": "153f8d23-fc0d-45cf-b69d-b5e7af45d3ad", "device": "rds-broker-01", "severity": "critical", "timestamp": "2026-09-27T04:00:43.666006+00:00"}]}
+
+### POST bad severity
+HTTP 400
+
+{
+  "error": "severity must be one of: info, warning, critical"
+}
+
+### POST missing fields
+HTTP 400
+
+{
+  "error": "device, severity, and message are required"
+}
+
+### GET unknown id
+HTTP 404
+
+{
+  "error": "Incident does-not-exist not found"
+}
+
+### DELETE (no route)
+HTTP 404
+
+{
+  "message": "Not Found"
+}
+

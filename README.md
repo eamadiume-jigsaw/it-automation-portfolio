@@ -28,6 +28,9 @@ A PowerShell health-check tool that monitors Remote Desktop Services broker heal
 ### 7. [Secure Web App Architecture: Case Study](./aws-secure-web-app-case-study)
 A complete AWS architecture built to solve a realistic business requirement: an internet-facing web app backed by a database that must never be directly reachable from the internet, deployed entirely by a least-privilege IAM identity with no standing admin access. Includes a custom VPC with public and private subnet separation across two Availability Zones, an EC2 web server, an RDS MySQL database whose isolation was proven with live connectivity tests (blocked from the internet, reachable only from the app server), and AWS Systems Manager Session Manager as a port-22-independent access method. The IAM policy was scoped iteratively against real `AccessDenied` errors from the actual build rather than guessed upfront, and IAM management is kept in a fully separate Terraform project from infrastructure management, mirroring a real separation-of-duties principle.
 
+### 8. [Serverless Incident API](./serverless-incident-api)
+A serverless REST API for logging infrastructure incidents (API Gateway HTTP API → three Python Lambdas → DynamoDB), deployed entirely with Terraform. The focus is least-privilege IAM: each function has its own role granting exactly one DynamoDB action (`PutItem`, `GetItem` or `Scan`) on one table, and every role is capped by a permissions boundary that the deploying user is required to attach, so even a widened inline policy can't exceed table + log access. Verified with the IAM Policy Simulator (`DeleteItem` and `iam:CreateUser` denied by the boundary) and live API tests covering validation (400), not-found (404) and unrouted methods. Includes route-scoped Lambda invoke permissions, stage throttling, on-demand billing and short log retention to keep a public, unauthenticated lab endpoint cheap and contained.
+
 ## Skills demonstrated across these projects
 
 - Microsoft Graph API scripting (PowerShell + Graph SDK)
@@ -42,6 +45,7 @@ A complete AWS architecture built to solve a realistic business requirement: an 
 - Infrastructure as Code with Terraform: dynamic resource lookups, security group design, automated provisioning via user_data
 - AWS: EC2, VPC (public/private subnet design, NAT Gateway, route tables), RDS, S3, IAM (least-privilege policy design, iterative scoping against real errors, separation of duties), Systems Manager Session Manager, CloudWatch metrics, boto3/AWS SDK for Python
 - Windows Remote Desktop Services (RD Connection Broker) health monitoring: service status checks, Windows Event Log parsing, CSV-based historical logging, Graph-based email alerting scoped via Exchange Online Application Access Policy
+- Serverless on AWS: API Gateway (HTTP API), Lambda (Python), DynamoDB on-demand; per-function IAM roles, permissions boundaries, IAM Policy Simulator verification
 - Environment-variable-based credential handling (no hardcoded secrets)
 - Deliberate blast-radius/safety design for automation touching production systems
 - Systematic troubleshooting of real infrastructure issues (RBAC propagation delays, WinRM/firewall configuration, module scope conflicts, UAC remote token restrictions, VPN subnet routing gaps, free-tier instance type eligibility across AWS regions, corporate endpoint security blocking outbound SSH, IAM service-linked role bootstrapping)
