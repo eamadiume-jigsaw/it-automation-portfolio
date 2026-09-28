@@ -1,4 +1,14 @@
 terraform {
+  # Remote state (migrated from a local file). Contains no secrets: the user
+  # access key is intentionally not managed here.
+  backend "s3" {
+    bucket       = "eamadiume-cicd-tfstate"
+    key          = "iam/terraform.tfstate"
+    region       = "eu-west-2"
+    use_lockfile = true
+    encrypt      = true
+  }
+
   required_providers {
     aws = {
       source  = "hashicorp/aws"
@@ -172,17 +182,17 @@ resource "aws_iam_user_policy_attachment" "cloud_engineer_attach" {
   policy_arn = aws_iam_policy.cloud_engineer_scoped.arn
 }
 
-resource "aws_iam_access_key" "cloud_engineer_key" {
-  user = aws_iam_user.cloud_engineer.name
-}
+# The user's access key is deliberately NOT managed by Terraform: a key created
+# by Terraform has its secret stored in state, and this state lives in a shared
+# S3 bucket. The existing key stays in AWS (used by the cloud-engineer-scoped
+# CLI profile) and is rotated manually. This block drops it from state without
+# deleting it.
+removed {
+  from = aws_iam_access_key.cloud_engineer_key
 
-output "cloud_engineer_access_key_id" {
-  value = aws_iam_access_key.cloud_engineer_key.id
-}
-
-output "cloud_engineer_secret_key" {
-  value     = aws_iam_access_key.cloud_engineer_key.secret
-  sensitive = true
+  lifecycle {
+    destroy = false
+  }
 }
 
 resource "aws_iam_policy" "incident_api_lambda_boundary" {
